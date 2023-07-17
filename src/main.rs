@@ -3,15 +3,12 @@ use std::iter;
 use anyhow::Result;
 use tokio::runtime;
 use vaultrs::{
-    api::{
-        pki::{
-            requests::GenerateCertificateRequestBuilder,
-            responses::GenerateCertificateResponse
-        }
+    api::pki::{
+        requests::GenerateCertificateRequestBuilder, responses::GenerateCertificateResponse,
     },
     client::{VaultClient, VaultClientSettingsBuilder},
     error::ClientError,
-    pki::cert
+    pki::cert,
 };
 
 // todoa: maybe cmd args? [too much]
@@ -28,14 +25,15 @@ fn main() -> Result<()> {
 
     // Instantiate runtime.
     runtime.block_on(async_main())
-    // nx_log::info!("Stopping Agent Manager, waiting for async tasks to stop...");
-    // runtime.shutdown_timeout(Duration::from_secs(2));
-    // nx_log::info!("Agent Manager stopped");
-    //Ok(())
 }
 
 #[cfg(unix)]
 async fn async_main() -> Result<()> {
+    // todoa: include logging lib
+    // log::warn!("[root] warn");
+    // log::info!("[root] info");
+    // log::debug!("[root] debug");
+
     let settings = VaultClientSettingsBuilder::default()
         .address(VAULT_ADDR)
         .token(VAULT_TOKEN)
@@ -58,9 +56,8 @@ async fn async_main() -> Result<()> {
             "generating {n} keys took {time:.2}s ({:.2} keys/s), errors: {errors_count}",
             n as f64 / time
         );
+        assert_eq!(errors_count, 0);
     }
-
-    // panic!("bench completed");
 
     Ok(())
 }
@@ -70,21 +67,24 @@ pub async fn generate_certificate(
 ) -> Result<GenerateCertificateResponse, ClientError> {
     let mut builder = GenerateCertificateRequestBuilder::default();
     let &mut _ = builder
+        .common_name("common_name")
         .format("pem")
         .private_key_format("pkcs8");
 
-    let resp =
-        cert::generate(client, VAULT_PKI_MOUNT, VAULT_PKI_CERT_ROLE, Some(&mut builder)).await;
+    let resp = cert::generate(
+        client,
+        VAULT_PKI_MOUNT,
+        VAULT_PKI_CERT_ROLE,
+        Some(&mut builder),
+    )
+    .await;
 
     let resp = resp.map_err(|err| {
-        println!("Generate cert error: {err}");
+        println!("Generate certificate error: {err}");
         err
     })?;
 
-    println!(
-        "Vault PKI certificate generated, key: {}",
-        resp.private_key_type
-    );
+    println!("Generated certificate, key type: {}", resp.private_key_type);
 
     Ok(resp)
 }
