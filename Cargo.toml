@@ -2,7 +2,24 @@
 name = "vault-cert-gen"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+vaultrs = "0.7.0"
+futures = "0.3.28"
+anyhow = "1.0.45"
+
+[dependencies.tokio]
+version = "1.14.0"
+features = [
+    "io-std",
+    "io-util",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "rt",
+    "signal",
+    "time",
+]
