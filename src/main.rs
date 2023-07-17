@@ -16,6 +16,8 @@ const VAULT_TOKEN: &str = "root";
 const VAULT_PKI_MOUNT: &str = "pki";
 // todoa: remove nxlog
 const VAULT_PKI_CERT_ROLE: &str = "nxlog-agent-manager-rsa";
+//const VAULT_PKI_CERT_ROLE: &str = "nxlog-agent-manager-ec";
+const CERTIFICATES_COUNT: usize = 1000;
 
 // todoa: as unit tests?
 fn main() -> Result<()> {
@@ -38,20 +40,16 @@ async fn async_main() -> Result<()> {
         .build()?;
     let client = VaultClient::new(settings)?;
 
-    let mut n_to_times = std::collections::HashMap::new();
-    for n in [1000] {
-        let now = std::time::Instant::now();
-        let futures = iter::repeat_with(|| generate_certificate(&client)).take(n);
-        let results = futures::future::join_all(futures).await;
-        let errors = results.into_iter().filter(Result::is_err).count();
-        _ = n_to_times.insert(n, (now.elapsed().as_secs_f64(), errors));
-    }
+    let n = CERTIFICATES_COUNT;
+    let now = std::time::Instant::now();
+    let futures = iter::repeat_with(|| generate_certificate(&client)).take(n);
+    let results = futures::future::join_all(futures).await;
+    let errors = results.into_iter().filter(Result::is_err).count();
 
-    for (n, (time, errors)) in n_to_times {
-        let speed = n as f64 / time;
-        log::info!("generating {n} keys took {time:.2}s ({speed:.2} keys/s), errors: {errors}");
-        assert_eq!(errors, 0);
-    }
+    let time = now.elapsed().as_secs_f64();
+    let speed = n as f64 / time;
+    log::info!("generating {n} keys took {time:.2}s ({speed:.2} keys/s), errors: {errors}");
+    assert_eq!(errors, 0);
 
     Ok(())
 }
