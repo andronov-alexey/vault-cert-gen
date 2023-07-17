@@ -1,6 +1,7 @@
 use std::iter;
 
 use anyhow::Result;
+use clap::Parser;
 use tokio::runtime;
 use vaultrs::{
     api::pki::{
@@ -17,32 +18,50 @@ const VAULT_PKI_MOUNT: &str = "pki";
 // todoa: remove nxlog
 const VAULT_PKI_CERT_ROLE: &str = "nxlog-agent-manager-rsa";
 //const VAULT_PKI_CERT_ROLE: &str = "nxlog-agent-manager-ec";
-const CERTIFICATES_COUNT: usize = 1000;
+const KEYS_COUNT: usize = 1000;
 
-// todoa: as unit tests?
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)] // Read from `Cargo.toml`
+struct Args {
+    #[arg(long, default_value=VAULT_ADDR)]
+    vault_addr: String,
+    #[arg(long, default_value=VAULT_TOKEN)]
+    vault_token: String,
+    #[arg(long, default_value=VAULT_PKI_MOUNT)]
+    vault_pki_mount: String,
+    #[arg(long, default_value=VAULT_PKI_CERT_ROLE)]
+    vault_pki_role: String,
+    /// Number of keys to generate
+    #[arg(long, default_value_t = KEYS_COUNT)]
+    keys_count: usize,
+}
+
 fn main() -> Result<()> {
     env_logger::init();
 
+    let args = Args::parse();
     let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
-    runtime.block_on(async_main())
+    runtime.block_on(async_main(args))
 }
 
 #[cfg(unix)]
-async fn async_main() -> Result<()> {
+async fn async_main(args: Args) -> Result<()> {
     log::error!("error test message");
     log::warn!("warn test message");
     log::info!("info test message");
     log::debug!("debug test message");
     log::trace!("trace test message");
     let settings = VaultClientSettingsBuilder::default()
-        .address(VAULT_ADDR)
-        .token(VAULT_TOKEN)
+        .address(args.vault_addr)
+        .token(args.vault_token)
         .build()?;
     let client = VaultClient::new(settings)?;
 
-    let n = CERTIFICATES_COUNT;
+    let n = args.keys_count;
+    let mount: &str = &args.vault_pki_mount;
+    let role: &str = &args.vault_pki_role;
     let now = std::time::Instant::now();
-    let futures = iter::repeat_with(|| generate_certificate(&client)).take(n);
+    let futures = iter::repeat_with(|| generate_certificate(&client, mount, role)).take(n);
     let results = futures::future::join_all(futures).await;
     let errors = results.into_iter().filter(Result::is_err).count();
 
@@ -56,6 +75,8 @@ async fn async_main() -> Result<()> {
 
 pub async fn generate_certificate(
     client: &VaultClient,
+    mount: &str,
+    role: &str,
 ) -> Result<GenerateCertificateResponse, ClientError> {
     let mut builder = GenerateCertificateRequestBuilder::default();
     let &mut _ = builder
@@ -63,13 +84,7 @@ pub async fn generate_certificate(
         .format("pem")
         .private_key_format("pkcs8");
 
-    let resp = cert::generate(
-        client,
-        VAULT_PKI_MOUNT,
-        VAULT_PKI_CERT_ROLE,
-        Some(&mut builder),
-    )
-    .await?;
+    let resp = cert::generate(client, mount, role, Some(&mut builder)).await?;
 
     log::info!("Generated certificate, key type: {}", resp.private_key_type);
 

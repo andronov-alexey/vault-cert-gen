@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.45"
+clap = { version = "4.3.12", features = ["derive"] }
 env_logger = "0.10.0"
 futures = "0.3.28"
 log = "0.4.19"
