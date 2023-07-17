@@ -1,0 +1,39 @@
+[package]
+name = "vault-cert-gen"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.45"
+clap = { version = "4.3.12", features = ["derive"] }
+env_logger = "0.10.0"
+futures = "0.3.28"
+log = "0.4.19"
+vaultrs = "0.7.0"
+
+[dependencies.tokio]
+version = "1.14.0"
+features = [
+    "io-std",
+    "io-util",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "rt",
+    "signal",
+    "time",
+]
+
+[dependencies.tracing-subscriber]
+version = "0.3.16"
+features = ["env-filter"]
+
+[dependencies.governor]
+version = "0.6.0"
+
+[dependencies.nonzero_ext]
+version = "0.3.0"
