@@ -1,0 +1,6 @@
+target
+.version
+
+
+.idea/*
+.vscode/*
