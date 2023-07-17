@@ -11,7 +11,6 @@ use vaultrs::{
     pki::cert,
 };
 
-// todoa: maybe cmd args? [too much]
 const VAULT_ADDR: &str = "http://localhost:8200";
 const VAULT_TOKEN: &str = "root";
 const VAULT_PKI_MOUNT: &str = "pki";
@@ -20,43 +19,38 @@ const VAULT_PKI_CERT_ROLE: &str = "nxlog-agent-manager-rsa";
 
 // todoa: as unit tests?
 fn main() -> Result<()> {
-    // Instantiate runtime.
-    let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
+    env_logger::init();
 
-    // Instantiate runtime.
+    let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
     runtime.block_on(async_main())
 }
 
 #[cfg(unix)]
 async fn async_main() -> Result<()> {
-    // todoa: include logging lib
-    // log::warn!("[root] warn");
-    // log::info!("[root] info");
-    // log::debug!("[root] debug");
-
+    log::error!("error test message");
+    log::warn!("warn test message");
+    log::info!("info test message");
+    log::debug!("debug test message");
+    log::trace!("trace test message");
     let settings = VaultClientSettingsBuilder::default()
         .address(VAULT_ADDR)
         .token(VAULT_TOKEN)
         .build()?;
-
     let client = VaultClient::new(settings)?;
+
     let mut n_to_times = std::collections::HashMap::new();
     for n in [1000] {
         let now = std::time::Instant::now();
         let futures = iter::repeat_with(|| generate_certificate(&client)).take(n);
         let results = futures::future::join_all(futures).await;
-        let errors_count = results.into_iter().filter(Result::is_err).count();
-        _ = n_to_times.insert(n, (now.elapsed().as_secs_f64(), errors_count));
+        let errors = results.into_iter().filter(Result::is_err).count();
+        _ = n_to_times.insert(n, (now.elapsed().as_secs_f64(), errors));
     }
-    let mut n_to_times = n_to_times.into_iter().collect::<Vec<_>>();
-    n_to_times.sort_by(|l, r| l.partial_cmp(r).unwrap());
-    #[allow(clippy::cast_precision_loss)]
-    for (n, (time, errors_count)) in n_to_times {
-        println!(
-            "generating {n} keys took {time:.2}s ({:.2} keys/s), errors: {errors_count}",
-            n as f64 / time
-        );
-        assert_eq!(errors_count, 0);
+
+    for (n, (time, errors)) in n_to_times {
+        let speed = n as f64 / time;
+        log::info!("generating {n} keys took {time:.2}s ({speed:.2} keys/s), errors: {errors}");
+        assert_eq!(errors, 0);
     }
 
     Ok(())
@@ -77,14 +71,9 @@ pub async fn generate_certificate(
         VAULT_PKI_CERT_ROLE,
         Some(&mut builder),
     )
-    .await;
+    .await?;
 
-    let resp = resp.map_err(|err| {
-        println!("Generate certificate error: {err}");
-        err
-    })?;
-
-    println!("Generated certificate, key type: {}", resp.private_key_type);
+    log::info!("Generated certificate, key type: {}", resp.private_key_type);
 
     Ok(resp)
 }
