@@ -23,13 +23,13 @@ const KEYS_COUNT: usize = 1000;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)] // Read from `Cargo.toml`
 struct Args {
-    #[arg(long, default_value=VAULT_ADDR)]
+    #[arg(long, default_value = VAULT_ADDR)]
     vault_addr: String,
-    #[arg(long, default_value=VAULT_TOKEN)]
+    #[arg(long, default_value = VAULT_TOKEN)]
     vault_token: String,
-    #[arg(long, default_value=VAULT_PKI_MOUNT)]
+    #[arg(long, default_value = VAULT_PKI_MOUNT)]
     vault_pki_mount: String,
-    #[arg(long, default_value=VAULT_PKI_CERT_ROLE)]
+    #[arg(long, default_value = VAULT_PKI_CERT_ROLE)]
     vault_pki_role: String,
     /// Number of keys to generate
     #[arg(long, default_value_t = KEYS_COUNT)]
