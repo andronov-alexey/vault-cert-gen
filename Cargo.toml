@@ -2,6 +2,7 @@
 name = "vault-cert-gen"
 version = "0.1.0"
 edition = "2021"
+readme = "README.md"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -26,3 +27,7 @@ features = [
     "signal",
     "time",
 ]
+
+[dependencies.tracing-subscriber]
+version = "0.3.16"
+features = ["env-filter"]

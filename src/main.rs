@@ -3,6 +3,7 @@ use std::iter;
 use anyhow::Result;
 use clap::Parser;
 use tokio::runtime;
+use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
     api::pki::{
         requests::GenerateCertificateRequestBuilder, responses::GenerateCertificateResponse,
@@ -34,23 +35,32 @@ struct Args {
     /// Number of keys to generate
     #[arg(long, default_value_t = KEYS_COUNT)]
     keys_count: usize,
+    #[arg(long, default_value = "info")]
+    spec: String,
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
-
     let args = Args::parse();
+
+    // This layer composing could be simplified after bug will be fixed https://github.com/tokio-rs/tracing/issues/1629
+    let filter = EnvFilter::builder().parse(&args.spec).unwrap();
+    let (filter, _reload_handle) = reload::Layer::new(filter);
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::Layer::default())
+        .init();
+
     let runtime = runtime::Builder::new_multi_thread().enable_all().build()?;
     runtime.block_on(async_main(args))
 }
 
 #[cfg(unix)]
 async fn async_main(args: Args) -> Result<()> {
-    log::error!("error test message");
-    log::warn!("warn test message");
-    log::info!("info test message");
-    log::debug!("debug test message");
-    log::trace!("trace test message");
+    // log::error!("error test message");
+    // log::warn!("warn test message");
+    // log::info!("info test message");
+    // log::debug!("debug test message");
+    // log::trace!("trace test message");
     let settings = VaultClientSettingsBuilder::default()
         .address(args.vault_addr)
         .token(args.vault_token)
