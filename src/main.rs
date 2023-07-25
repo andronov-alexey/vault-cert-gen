@@ -2,9 +2,10 @@ use std::iter;
 
 use anyhow::Result;
 use clap::Parser;
-use governor::{Quota, RateLimiter};
+use governor::{Jitter, Quota, RateLimiter};
 use nonzero_ext::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::runtime;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
@@ -78,14 +79,16 @@ async fn async_main(args: Args) -> Result<()> {
     let quota = Quota::per_second(nonzero!(1u32));
     // todoa: we will use keyed
     let lim = RateLimiter::direct(quota);
-    //let mut lim = Arc::new(lim);
+    let min = quota.replenish_interval();
+    let jitter = Jitter::new(min, min / 3);
+    //let jitter = Jitter::default();
 
     let now = std::time::Instant::now();
 
     let futures = iter::repeat_with(|| async {
         let now2 = std::time::Instant::now();
         log::info!("attempt to grab token start ...");
-        lim.until_ready().await;
+        lim.until_ready_with_jitter(jitter).await;
         let time = now2.elapsed();
         log::info!("token granted, waited {time:?}!");
 
