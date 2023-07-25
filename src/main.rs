@@ -2,11 +2,9 @@ use std::iter;
 
 use anyhow::Result;
 use clap::Parser;
-use governor::clock::{Clock, QuantaClock};
 use governor::{Quota, RateLimiter};
 use nonzero_ext::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 use tokio::runtime;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
@@ -59,8 +57,6 @@ fn main() -> Result<()> {
     runtime.block_on(async_main(args))
 }
 
-use governor::clock::Reference;
-
 #[cfg(unix)]
 async fn async_main(args: Args) -> Result<()> {
     // log::error!("error test message");
@@ -79,9 +75,7 @@ async fn async_main(args: Args) -> Result<()> {
     let role: &str = &args.vault_pki_role;
 
     let gen_certs_count: AtomicUsize = AtomicUsize::new(0);
-    // Allow 100 units per second
-    // todoa: can allow burst
-    let quota = Quota::per_second(nonzero!(10u32));
+    let quota = Quota::per_second(nonzero!(1u32));
     // todoa: we will use keyed
     let lim = RateLimiter::direct(quota);
     //let mut lim = Arc::new(lim);
@@ -89,33 +83,11 @@ async fn async_main(args: Args) -> Result<()> {
     let now = std::time::Instant::now();
 
     let futures = iter::repeat_with(|| async {
-        let mut access_granted = false;
-        for attempt in 0..3 {
-            log::info!("attempt #{attempt} start");
-            match lim.check() {
-                Ok(_pos) => {
-                    log::info!("request granted!");
-                    access_granted = true;
-                    break;
-                }
-                Err(neg) => {
-                    let now2 = QuantaClock::default().now();
-                    let wait_time = neg.wait_time_from(now2);
-                    log::info!(
-                        "request denied, waiting {wait_time:?} [{}ns] ...",
-                        wait_time.as_nanos(),
-                    );
-                    tokio::time::sleep(wait_time).await;
-                    log::info!("finished waiting, next attempt");
-                    continue;
-                }
-            };
-        }
-
-        if !access_granted {
-            log::info!("Failed to get access, giving up");
-            return Err(ClientError::ResponseDataEmptyError);
-        }
+        let now2 = std::time::Instant::now();
+        log::info!("attempt to grab token start ...");
+        lim.until_ready().await;
+        let time = now2.elapsed();
+        log::info!("token granted, waited {time:?}!");
 
         let prev = gen_certs_count.fetch_add(1, Ordering::Release);
         log::info!("generating cert #{}", prev + 1);
@@ -125,9 +97,9 @@ async fn async_main(args: Args) -> Result<()> {
     let results = futures::future::join_all(futures).await;
     let errors = results.into_iter().filter(Result::is_err).count();
 
-    let time = now.elapsed().as_secs_f64();
-    let speed = n as f64 / time;
-    log::info!("generating {n} keys took {time:.2}s ({speed:.2} keys/s), errors: {errors}");
+    let time = now.elapsed();
+    let speed = n as f64 / time.as_secs_f64();
+    log::info!("generating {n} keys took {time:.2?} ({speed:.2} keys/s), errors: {errors}");
     assert_eq!(errors, 0);
 
     Ok(())
