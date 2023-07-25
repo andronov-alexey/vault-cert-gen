@@ -2,6 +2,10 @@ use std::iter;
 
 use anyhow::Result;
 use clap::Parser;
+use governor::clock::{Clock, QuantaClock};
+use governor::{Quota, RateLimiter};
+use nonzero_ext::*;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::runtime;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
@@ -54,6 +58,8 @@ fn main() -> Result<()> {
     runtime.block_on(async_main(args))
 }
 
+use governor::clock::Reference;
+
 #[cfg(unix)]
 async fn async_main(args: Args) -> Result<()> {
     // log::error!("error test message");
@@ -70,8 +76,54 @@ async fn async_main(args: Args) -> Result<()> {
     let n = args.keys_count;
     let mount: &str = &args.vault_pki_mount;
     let role: &str = &args.vault_pki_role;
+
+    let gen_certs_count: AtomicUsize = AtomicUsize::new(0);
+    // Allow 100 units per second
+    // todoa: can allow burst
+    let quota = Quota::per_second(nonzero!(10u32));
+    // todoa: we will use keyed
+    let lim = RateLimiter::direct(quota);
+    //let mut lim = Arc::new(lim);
+
     let now = std::time::Instant::now();
-    let futures = iter::repeat_with(|| generate_certificate(&client, mount, role)).take(n);
+
+    let futures = iter::repeat_with(|| async {
+        let mut access_granted = false;
+        for attempt in 0..3 {
+            log::info!("attempt #{attempt} start");
+            match lim.check() {
+                Ok(_pos) => {
+                    log::info!("request granted!");
+                    access_granted = true;
+                    break;
+                }
+                Err(neg) => {
+                    let now2 = QuantaClock::default().now();
+                    let earliest_possible_instant = neg.earliest_possible();
+                    let wait_time = neg.wait_time_from(earliest_possible_instant);
+                    //let wait_time2 = neg.wait_time_from(now2);
+                    log::info!(
+                        "request denied, waiting {wait_time:?} ({:?}) [{}ns]...",
+                        earliest_possible_instant.duration_since(now2),
+                        wait_time.as_nanos()
+                    );
+                    tokio::time::sleep(wait_time).await;
+                    log::info!("finished waiting, next attempt");
+                    continue;
+                }
+            };
+        }
+
+        if !access_granted {
+            log::info!("Failed to get access, giving up");
+            return Err(ClientError::ResponseDataEmptyError);
+        }
+
+        let prev = gen_certs_count.fetch_add(1, Ordering::Release);
+        log::info!("generating cert #{}", prev + 1);
+        generate_certificate(&client, mount, role).await
+    })
+    .take(n);
     let results = futures::future::join_all(futures).await;
     let errors = results.into_iter().filter(Result::is_err).count();
 

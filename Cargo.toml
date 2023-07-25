@@ -31,3 +31,10 @@ features = [
 [dependencies.tracing-subscriber]
 version = "0.3.16"
 features = ["env-filter"]
+
+[dependencies.governor]
+version = "0.6.0"
+#features = ["default"]
+
+[dependencies.nonzero_ext]
+version = "0.3.0"
