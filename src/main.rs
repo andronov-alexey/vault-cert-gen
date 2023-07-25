@@ -5,7 +5,6 @@ use clap::Parser;
 use governor::{Jitter, Quota, RateLimiter};
 use nonzero_ext::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 use tokio::runtime;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
@@ -76,12 +75,15 @@ async fn async_main(args: Args) -> Result<()> {
     let role: &str = &args.vault_pki_role;
 
     let gen_certs_count: AtomicUsize = AtomicUsize::new(0);
-    let quota = Quota::per_second(nonzero!(1u32));
+    //let quota = Quota::per_second(nonzero!(500u32)).allow_burst(nonzero!(500u32));
+    // todoi: ideal EC quota
+    let quota = Quota::per_second(nonzero!(600u32));
+    // todoi: ideal RSA quota
+    //let quota = Quota::per_second(nonzero!(10u32));
     // todoa: we will use keyed
     let lim = RateLimiter::direct(quota);
     let min = quota.replenish_interval();
-    let jitter = Jitter::new(min, min / 3);
-    //let jitter = Jitter::default();
+    let jitter = Jitter::new(min, 3 * min);
 
     let now = std::time::Instant::now();
 
