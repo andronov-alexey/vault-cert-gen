@@ -6,6 +6,7 @@ use governor::clock::{Clock, QuantaClock};
 use governor::{Quota, RateLimiter};
 use nonzero_ext::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
 use tokio::runtime;
 use tracing_subscriber::{fmt, layer::SubscriberExt, reload, util::SubscriberInitExt, EnvFilter};
 use vaultrs::{
@@ -99,13 +100,10 @@ async fn async_main(args: Args) -> Result<()> {
                 }
                 Err(neg) => {
                     let now2 = QuantaClock::default().now();
-                    let earliest_possible_instant = neg.earliest_possible();
-                    let wait_time = neg.wait_time_from(earliest_possible_instant);
-                    //let wait_time2 = neg.wait_time_from(now2);
+                    let wait_time = neg.wait_time_from(now2);
                     log::info!(
-                        "request denied, waiting {wait_time:?} ({:?}) [{}ns]...",
-                        earliest_possible_instant.duration_since(now2),
-                        wait_time.as_nanos()
+                        "request denied, waiting {wait_time:?} [{}ns] ...",
+                        wait_time.as_nanos(),
                     );
                     tokio::time::sleep(wait_time).await;
                     log::info!("finished waiting, next attempt");
